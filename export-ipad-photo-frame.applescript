@@ -4,7 +4,7 @@
 -- GitHub: https://github.com/Maloffstrano/applescript-ipad-frame-photo-exporter
 -- GitHub clone: git@github.com:Maloffstrano/applescript-ipad-frame-photo-exporter.git
 --
--- How to use:
+-- How to use this file:
 -- 1) Script Editor
 --    To use the macOS native _Script Editor_ tool, copy the contents of this 
 --    file into the _Script Editor_ macOS app. Save the file with an _scpt_ 
@@ -13,9 +13,11 @@
 --    To use Visual Studio Code (VScode), make sure you have the AppleScript
 --    extension to VScode installed. Open this file in VScode and use the
 --    keystroke Shift-Option-R command (or the command palette _AppleScript:
---    Run Script_) to run the script.
+--    Run Script_) to run the script. On macOS Catalina, you will get a 
+--    security prompt about every application this script "tells" when the
+--    code is run from VScode.
 --
--- Short Description:
+-- Short description:
 -- Exports selected images from the macOS Photos app and then uses macOS 
 -- Keynote app to process the images down to first generation iPad screen size. 
 -- Each image is captioned with either the EXIF Description, EXIF Title or 
@@ -28,33 +30,36 @@
 -- Inpiration:
 -- This script was inspired by a Pages example at: https://iworkautomation.com/pages/image.html
 
+-- The list of landscape and portrait frames. Names are used as folder prefixes.
 property landscapeFrames : {"Landscape"}
 property portraitFrames : {"Portrait1", "Portrait2"}
 
-property themeName : "Basic White"
-property defaultMargin : 36
-property textItemInset : 12
-
+-- Choose the display aspect ratio. First generation iPads are 4:3.
 -- 4:3 aspect ratio
 property imageShortDimension : 768
 property imageLongDimension : 1024
-
 --  16:9 aspect ratio
 -- property imageShortDimension : 1080
 -- property imageLongDimension : 1920
 
--- Choose the font fromm your available fonts. 
--- Use CMD-T (Font > Show Fonts) in the Script Editor to view your available fonts.
-property textFont : "Sheldon_Printing"
-property textSize : 20
-property textColor : "white"
-property textPadding : 3
-property textOpacity : 60
+-- Use CMD-T (Font > Show Fonts) in Script Editor to see available fonts.
+property captionFont : "Sheldon_Printing"    -- My custom hand writing font
+-- property captionFont : "Helvetical Neue"  -- Standard Apple font
+property captionSize : 20
+property captionColor : "white"
+property captionOpacity : 60
+property captionBottomPadding : 3
 
-property jpegCompressionFactor : 0.8
+-- Adjust this value depending on how big the final images should be.
+property jpegCompressionFactor : 0.8 -- ~200-300KB files
 
--- For the export to work, Keynote needs permission to write to whatever is specified here
+-- For the export to work, Keynote needs permission to write to whatever is 
+-- specified here.
 property defaultExportFolder : path to documents folder
+
+-- Keynote theme to use. It doesn't really matter, script overrides everything.
+property themeName : "Basic White"
+
 
 my go()
 
@@ -62,7 +67,8 @@ on go()
     my ensureAppIsRunning("Photos", "Photos is not running", "Start Photos, select 1 or more images and then try the script again.")
     my ensurePhotosSelected()
 
-    set photosExportFolder to my createDatedFolder(defaultExportFolder, "Photos-Export")
+    set runDate to current date
+    set photosExportFolder to my createDatedFolder(defaultExportFolder, "Photos-Export", runDate)
     my exportPhotos(photosExportFolder)
     
     set landscapeFolders to my createFrameFolders(photosExportFolder, landscapeFrames)
@@ -75,24 +81,18 @@ on go()
     
     tell application "Finder"
         repeat with folderToProcess in portraitFolders
-            my processImagesWithKeynote(get every file of folderToProcess, name of folderToProcess, imageShortDimension, imageLongDimension)
+            set resultFolder to my createDatedFolder(defaultExportFolder, "Frame-" & name of folderToProcess, runDate)
+            my processImagesWithKeynote(get every file of folderToProcess, resultFolder, imageShortDimension, imageLongDimension)
         end repeat
         
         repeat with folderToProcess in landscapeFolders
-            my processImagesWithKeynote(get every file of folderToProcess, name of folderToProcess, imageLongDimension, imageShortDimension)
+            set resultFolder to my createDatedFolder(defaultExportFolder, "Frame-" & name of folderToProcess, runDate)
+            my processImagesWithKeynote(get every file of folderToProcess, resultFolder, imageLongDimension, imageShortDimension)
         end repeat
         
         delete photosExportFolder
     end tell
 end go
-
-on exportPhotos(exportFolder)
-    tell application "Photos"
-        activate
-        set selectedImages to selection
-        export selectedImages to file (my pathToString(exportFolder))
-    end tell
-end exportPhotos
 
 -- Ensure the named app is running. 
 -- This handler may terminate the script.
@@ -140,14 +140,16 @@ on ensurePhotosExported(exportFolder, fileCount)
         activate
         open exportFolder
         
-        -- WEIRD: This dialog is needed to give Finder file read access. Why?
         if fileCount is 0 then
             set buttonText to "Quit"
         else
             set buttonText to "Continue"
         end if
         
-        display dialog "Exported images:" & fileCount with title "Done exporting photos" buttons buttonText default button buttonText
+        -- WEIRD: This dialog is needed to give Finder file read access. Why?
+        display dialog "Photos exported images:" & fileCount ¬
+            with title "Exported photos" ¬
+            buttons buttonText default button buttonText
         
         if fileCount is 0 then
             my endScript()
@@ -159,6 +161,14 @@ end ensureFilesSelected
 on endScript()
     error number -128
 end endScript
+
+on exportPhotos(exportFolder)
+    tell application "Photos"
+        activate
+        set selectedImages to selection
+        export selectedImages to file (my pathToString(exportFolder))
+    end tell
+end exportPhotos
 
 -- Distribute the original files evenly into the portrait and landscape folders
 on moveOriginalsToFrameFolders(imageFiles, portraitFolders, landscapeFolders)
@@ -182,7 +192,7 @@ on moveOriginalsToFrameFolders(imageFiles, portraitFolders, landscapeFolders)
     end tell
 end moveOriginalsToFrameFolders
 
-on processImagesWithKeynote(selectedImages, exportFolderNamePrefix, slideWidth, slideHeight)
+on processImagesWithKeynote(selectedImages, outputFolder, slideWidth, slideHeight)
     tell application "Keynote"
         -- Uncomment if you want to see Keynote in action
         -- activate
@@ -193,7 +203,7 @@ on processImagesWithKeynote(selectedImages, exportFolderNamePrefix, slideWidth, 
         tell keynoteDocument
             -- add images, one per slide
             repeat with selectedImage in selectedImages
-                set imageCaption to my extractCaption(selectedImage)
+                set captionText to my extractCaption(selectedImage)
                 
                 make new slide
                 
@@ -208,16 +218,16 @@ on processImagesWithKeynote(selectedImages, exportFolderNamePrefix, slideWidth, 
                         set its position to {0, 0}
                     end tell
                     
-                    if imageCaption is not "" then
-                        set textItem to make new text item with properties ¬
-                            {object text:imageCaption ¬
+                    if captionText is not "" then
+                        set imageCaption to make new text item with properties ¬
+                            {object text:captionText ¬
                                 , width:slideWidth ¬
-                                , height:textSize ¬
-                                , position:{0, slideHeight - textSize - textPadding} ¬
-                                , opacity:textOpacity}
+                                , height:captionSize ¬
+                                , position:{0, slideHeight - captionSize - captionBottomPadding} ¬
+                                , opacity:captionOpacity}
                         
-                        tell object text of textItem
-                            set properties to {font:textFont, size:textSize, color:textColor}
+                        tell object text of imageCaption
+                            set properties to {font:captionFont, size:captionSize, color:captionColor}
                         end tell
                     end if
                 end tell
@@ -226,7 +236,7 @@ on processImagesWithKeynote(selectedImages, exportFolderNamePrefix, slideWidth, 
             delete first slide -- First slide is always blank
         end tell
         
-        export keynoteDocument to file (my createDatedFolder(defaultExportFolder, "Frame-" & exportFolderNamePrefix) as string) ¬
+        export keynoteDocument to my pathToAlias(outputFolder) ¬ 
             as slide images ¬
             with properties ¬
             {compression factor:jpegCompressionFactor ¬
@@ -268,16 +278,6 @@ on spotlightProperty(propertyName, imageFile)
     end if
 end spotlightProperty
 
-on imageDimensions(imageFile)
-    tell application "Image Events"
-        set theImage to open pathToString(imageFile)
-        tell theImage
-            set theDimensions to dimensions
-        end tell
-        return the dimensions
-    end tell
-end imageDimensions
-
 -- Convert anything to an alias
 on pathToAlias(thePath)
     tell application "System Events"
@@ -312,7 +312,7 @@ on pathToPosixString(thePath)
     return POSIX path of thePath
 end pathToPosixString
 
--- Returns a string of the form YY/MM representing the time the photo was taken
+-- Returns a string as form YY/MM representing the time the photo was taken
 on imageCreationYearMonth(imageFile)
     set createDate to spotlightProperty("kMDItemContentCreationDate", imageFile)
     set createdYear to characters 3 thru 4 of createDate as string
@@ -321,18 +321,17 @@ on imageCreationYearMonth(imageFile)
 end imageCreationYearMonth
 
 -- Get the date and time suitable for part of a folder name
-on formattedTimeNow()
-    set now to (current date)
-    set theYear to year of now as string
-    set theMonthName to month of now as string
-    set theDay to zeroPad(day of now as string)
-    set theHour to zeroPad(hours of now as string)
-    set theMinute to zeroPad(minutes of now as string)
-    set theSecond to zeroPad(seconds of now as string)
+on formattedTime(theTime)
+    set theYear to year of theTime as string
+    set theMonthName to month of theTime as string
+    set theDay to zeroPad(day of theTime as string)
+    set theHour to zeroPad(hours of theTime as string)
+    set theMinute to zeroPad(minutes of theTime as string)
+    set theSecond to zeroPad(seconds of theTime as string)
     
     set formattedDate to theYear & "-" & theMonthName & "-" & theDay & "_" & theHour & "-" & theMinute & "-" & theSecond
     return formattedDate
-end formattedTimeNow
+end formattedTime
 
 -- Pad theValue with a leading zero when less than 10.
 on zeroPad(theValue)
@@ -347,8 +346,8 @@ on createFolder(parentFolder, folderName)
 end createFolder
 
 -- Create a uniquely named folder and return the folder object.
-on createDatedFolder(parentFolder, folderPrefix)
-    return my createFolder(parentFolder, folderPrefix & "-" & my formattedTimeNow())
+on createDatedFolder(parentFolder, folderPrefix, theDate)
+    return my createFolder(parentFolder, folderPrefix & "-" & my formattedTime(theDate))
 end createDatedFolder
 
 -- Create a folder for each frame name in the list and return the list of folders.
