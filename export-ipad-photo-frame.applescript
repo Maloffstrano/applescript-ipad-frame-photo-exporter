@@ -4,12 +4,22 @@
 -- GitHub: https://github.com/Maloffstrano/applescript-ipad-frame-photo-exporter
 -- GitHub clone: git@github.com:Maloffstrano/applescript-ipad-frame-photo-exporter.git
 --
+-- How to use:
+-- 1) Script Editor
+--    To use the macOS native _Script Editor_ tool, copy the contents of this 
+--    file into the _Script Editor_ macOS app. Save the file with an _scpt_ 
+--    extension and press the Play button on the toolbar to run the script.
+-- 2) Visual Studio Code
+--    To use Visual Studio Code (VScode), make sure you have the AppleScript
+--    extension to VScode installed. Open this file in VScode and use the
+--    keystroke Shift-Option-R command (or the command palette _AppleScript:
+--    Run Script_) to run the script.
+--
 -- Short Description:
--- A script that exports selected images from the macOS Photos app and
--- then uses macOS Keynote app to process the images down to iPad v1
--- screen size. Each image is captioned with either the EXIF Description, 
--- EXIF Title or EXIF creation date. For the longer description, see the 
--- README.md on GitHub.
+-- Exports selected images from the macOS Photos app and then uses macOS 
+-- Keynote app to process the images down to first generation iPad screen size. 
+-- Each image is captioned with either the EXIF Description, EXIF Title or 
+-- EXIF creation date. For a longer description, see the README.md on GitHub.
 --
 -- To do:
 -- 1) Center and crop images that are not 4:3. Currently an image
