@@ -59,14 +59,17 @@ property defaultExportFolder : path to documents folder
 my go()
 
 on go()
+    my ensureAppIsRunning("Photos", "Photos is not running", "Start Photos, select 1 or more images and then try the script again.")
+    my ensurePhotosSelected()
+
     set photosExportFolder to my createDatedFolder(defaultExportFolder, "Photos-Export")
-    my exportSelectedPhotos(photosExportFolder)
+    my exportPhotos(photosExportFolder)
     
     set landscapeFolders to my createFrameFolders(photosExportFolder, landscapeFrames)
     set portraitFolders to my createFrameFolders(photosExportFolder, portraitFrames)
     
     tell application "Finder" to set exportedImageFiles to get every file of photosExportFolder
-    my showPhotoExportFolder(photosExportFolder, count of exportedImageFiles)
+    my ensurePhotosExported(photosExportFolder, count of exportedImageFiles)
     
     my moveOriginalsToFrameFolders(exportedImageFiles, portraitFolders, landscapeFolders)
     
@@ -83,35 +86,79 @@ on go()
     end tell
 end go
 
-on exportSelectedPhotos(exportFolder)
+on exportPhotos(exportFolder)
     tell application "Photos"
         activate
         set selectedImages to selection
         export selectedImages to file (my pathToString(exportFolder))
     end tell
-end exportSelectedPhotos
+end exportPhotos
 
--- Show the export folder and a count of files exported
--- This handler will terminate the script when no files were exported
-on showPhotoExportFolder(exportFolder, fileCount)
+-- Ensure the named app is running. 
+-- This handler may terminate the script.
+-- Based on: https://stackoverflow.com/a/16071855
+on ensureAppIsRunning(appName, dialogTitle, dialogMessage)
+    if application appName is not running then
+      tell application "Finder"
+        activate
+        display dialog dialogMessage with title dialogTitle buttons {"Quit"} default button "Quit"
+        my endScript()
+      end tell
+    end if
+end ensureAppIsRunning
+
+-- Ensures the user has selected photos.
+-- This handler may terminate the script.
+on ensurePhotosSelected()
+    local selectedCount
+    local dialogResult
+
+    tell application "Photos"
+        activate
+        set selectedCount to count of selection
+        if selectedCount is 0 then
+            display dialog "Select 1 or more images and then try the script again." ¬
+                with title "No images selected" ¬
+                buttons {"Quit"} default button "Quit"
+            my endScript()
+        else
+            set dialogResult to button returned of ¬
+                (display dialog "Images to export: " & selectedCount ¬
+                    with title "Photos export" ¬
+                    buttons {"Quit", "Continue"} default button "Continue")
+            if dialogResult is "Quit" then
+                my endScript()
+            end
+        end if
+    end tell
+end ensurePhotosSelected
+
+-- Shows the exported folder.
+-- This handler may terminate the script.
+on ensurePhotosExported(exportFolder, fileCount)
     tell application "Finder"
         activate
         open exportFolder
         
-        -- TODO: why is a dialog needed to give file read access?
+        -- WEIRD: This dialog is needed to give Finder file read access. Why?
         if fileCount is 0 then
             set buttonText to "Quit"
         else
             set buttonText to "Continue"
         end if
         
-        display dialog "Exported images:" & fileCount buttons {buttonText} default button buttonText
+        display dialog "Exported images:" & fileCount with title "Done exporting photos" buttons buttonText default button buttonText
         
         if fileCount is 0 then
-            error number -128
+            my endScript()
         end if
     end tell
-end showPhotoExportFolder
+end ensureFilesSelected
+
+-- Ends the script with a user cancelled error.
+on endScript()
+    error number -128
+end endScript
 
 -- Distribute the original files evenly into the portrait and landscape folders
 on moveOriginalsToFrameFolders(imageFiles, portraitFolders, landscapeFolders)
