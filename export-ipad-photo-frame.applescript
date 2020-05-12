@@ -376,7 +376,3 @@ on nextFolder(folderList, currentFolderIndex)
     end if
     return {currentFolder, currentFolderIndex}
 end nextFolder
-
-on centerImageOnSlide(importedImage)
-    local importedHeight
-end centerImageOnSlide
