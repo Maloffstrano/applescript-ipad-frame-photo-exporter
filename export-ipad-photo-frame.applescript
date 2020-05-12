@@ -23,10 +23,6 @@
 -- Each image is captioned with either the EXIF Description, EXIF Title or 
 -- EXIF creation date. For a longer description, see the README.md on GitHub.
 --
--- To do:
--- 1) Center and crop images that are not 4:3. Currently an image
--- is cropped on the right and bottom when it is not 4:3.
---
 -- Inpiration:
 -- This script was inspired by a Pages example at: https://iworkautomation.com/pages/image.html
 
@@ -204,21 +200,29 @@ on processImagesWithKeynote(selectedImages, outputFolder, slideWidth, slideHeigh
         tell keynoteDocument
             -- add images, one per slide
             repeat with selectedImage in selectedImages
-                set captionText to my extractCaption(selectedImage)
-                
                 make new slide
                 
                 tell current slide
                     -- import the image
                     set importedImage to make new image with properties {file:my pathToAlias(selectedImage)}
-                    
-                    -- image takes up the whole slide
+
+                    -- center the image on the slide
                     tell importedImage
-                        set its width to slideWidth
-                        set its height to slideHeight
-                        set its position to {0, 0}
+                        set importedHeight to height 
+                        -- setting one image dimension to the slide dimension causes the 
+                        -- other to overflow due to "contrain proportions" 
+                        if importedHeight is slideHeight then
+                            set its width to slideWidth
+                        else
+                            set its height to slideHeight
+                        end if
+                        copy {width of it, height of it} to {actualWidth, actualHeight}
+                        -- center the image on the slide
+                        set its position to {-(actualWidth - slideWidth) div 2, -(actualHeight - slideHeight) div 2}
                     end tell
-                    
+
+                    -- apply the caption to the image, if any
+                    set captionText to my extractCaption(selectedImage)
                     if captionText is not "" then
                         set imageCaption to make new text item with properties ¬
                             {object text:captionText ¬
