@@ -235,7 +235,6 @@ on processImagesWithKeynote(selectedImages, outputFolder, slideWidth, slideHeigh
                             set properties to {font:captionFont, size:captionSize, color:captionColor}
                         end tell
                     end if
-
                 end tell
             end repeat
             
