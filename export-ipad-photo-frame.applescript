@@ -56,6 +56,7 @@ property jpegCompressionFactor : 0.8 -- ~200-300KB files
 -- For the export to work, Keynote needs permission to write to whatever is 
 -- specified here.
 property defaultExportFolder : path to documents folder
+property outputFolderPrefix : "Frame-"
 
 -- Keynote theme to use. It doesn't really matter, script overrides everything.
 property themeName : "Basic White"
@@ -81,12 +82,12 @@ on go()
     
     tell application "Finder"
         repeat with folderToProcess in portraitFolders
-            set resultFolder to my createDatedFolder(defaultExportFolder, "Frame-" & name of folderToProcess, runDate)
+            set resultFolder to my createDatedFolder(defaultExportFolder, outputFolderPrefix & name of folderToProcess, runDate)
             my processImagesWithKeynote(get every file of folderToProcess, resultFolder, imageShortDimension, imageLongDimension)
         end repeat
         
         repeat with folderToProcess in landscapeFolders
-            set resultFolder to my createDatedFolder(defaultExportFolder, "Frame-" & name of folderToProcess, runDate)
+            set resultFolder to my createDatedFolder(defaultExportFolder, outputFolderPrefix & name of folderToProcess, runDate)
             my processImagesWithKeynote(get every file of folderToProcess, resultFolder, imageLongDimension, imageShortDimension)
         end repeat
         
