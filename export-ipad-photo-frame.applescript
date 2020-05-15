@@ -26,6 +26,12 @@
 -- Inpiration:
 -- This script was inspired by a Pages example at: https://iworkautomation.com/pages/image.html
 
+
+-- Set this property to true to log spotlightProperty debugging information.
+-- Useful to diagnose why some image's orientation is classified incorrectly.
+-- The problem is usually Photos app showing the wrong thumbnail for an image.
+property logDebugging : false
+
 -- The list of landscape and portrait frames. Names are used as folder prefixes.
 property landscapeFrames : {"Landscape"}
 property portraitFrames : {"Portrait1", "Portrait2"}
@@ -76,19 +82,17 @@ on go()
     
     my moveOriginalsToFrameFolders(exportedImageFiles, portraitFolders, landscapeFolders)
     
-    tell application "Finder"
-        repeat with folderToProcess in portraitFolders
-            set resultFolder to my createDatedFolder(defaultExportFolder, resultFolderPrefix & name of folderToProcess, runDate)
-            my processImagesWithKeynote(get every file of folderToProcess, resultFolder, imageShortDimension, imageLongDimension)
-        end repeat
+    repeat with folderToProcess in portraitFolders
+        my processFilesInFolder(folderToProcess, imageShortDimension, imageLongDimension, runDate)
+    end repeat
         
-        repeat with folderToProcess in landscapeFolders
-            set resultFolder to my createDatedFolder(defaultExportFolder, resultFolderPrefix & name of folderToProcess, runDate)
-            my processImagesWithKeynote(get every file of folderToProcess, resultFolder, imageLongDimension, imageShortDimension)
-        end repeat
-        
-        delete photosExportFolder
-    end tell
+    repeat with folderToProcess in landscapeFolders
+        my processFilesInFolder(folderToProcess, imageLongDimension, imageShortDimension, runDate)
+    end repeat
+
+    if logDebugging is false then    
+        tell application "Finder" to delete photosExportFolder
+    end if
 end go
 
 -- Ensure the named app is running. 
@@ -146,7 +150,8 @@ on ensurePhotosExported(exportFolder, fileCount)
         -- WEIRD: This dialog is needed to give Finder file read access. Why?
         display dialog "Photos exported images:" & fileCount ¬
             with title "Exported photos" ¬
-            buttons buttonText default button buttonText
+            buttons buttonText default button buttonText ¬
+            giving up after 10
         
         if fileCount is 0 then
             my endScript()
@@ -160,11 +165,13 @@ on endScript()
 end endScript
 
 on exportPhotos(exportFolder)
-    tell application "Photos"
-        activate
-        set selectedImages to selection
-        export selectedImages to file (my pathToString(exportFolder))
-    end tell
+    with timeout of 1200 seconds
+        tell application "Photos"
+            activate
+            set selectedImages to selection
+            export selectedImages to file (my pathToString(exportFolder))
+        end tell
+    end timeout
 end exportPhotos
 
 -- Distribute the original files evenly into the portrait and landscape folders
@@ -176,8 +183,8 @@ on moveOriginalsToFrameFolders(imageFiles, portraitFolders, landscapeFolders)
         local destinationFolder
         
         repeat with imageFile in imageFiles
-            set imageHeight to my spotlightProperty("kMDItemPixelHeight", imageFile)
-            set imageWidth to my spotlightProperty("kMDItemPixelWidth", imageFile)
+            set imageHeight to (my spotlightProperty("kMDItemPixelHeight", imageFile) as number)
+            set imageWidth to (my spotlightProperty("kMDItemPixelWidth", imageFile) as number)
             
             if imageWidth < imageHeight then
                 set {destinationFolder, currentPortraitFrameIndex} to my nextFolder(portraitFolders, currentPortraitFrameIndex)
@@ -188,6 +195,16 @@ on moveOriginalsToFrameFolders(imageFiles, portraitFolders, landscapeFolders)
         end repeat
     end tell
 end moveOriginalsToFrameFolders
+
+on processFilesInFolder(folderToProcess, imageWidth, imageHeight, runDate)
+    tell application "Finder"
+        set filesToProcess to get every file of folderToProcess
+        if count of filesToProcess is not 0 then
+            set resultFolder to my createDatedFolder(defaultExportFolder, resultFolderPrefix & name of folderToProcess, runDate)
+            my processImagesWithKeynote(filesToProcess, resultFolder, imageWidth, imageHeight)
+        end if
+    end tell
+end processFilesInFolder
 
 on processImagesWithKeynote(selectedImages, outputFolder, slideWidth, slideHeight)
     tell application "Keynote"
@@ -241,13 +258,15 @@ on processImagesWithKeynote(selectedImages, outputFolder, slideWidth, slideHeigh
             delete first slide -- First slide is always blank
         end tell
         
-        export keynoteDocument to my pathToAlias(outputFolder) ¬ 
-            as slide images ¬
-            with properties ¬
-            {compression factor:jpegCompressionFactor ¬
-                , image format:JPEG ¬
-                , export style:IndividualSlides}
-        
+        with timeout of 1200 seconds
+            export keynoteDocument to my pathToAlias(outputFolder) ¬ 
+                as slide images ¬
+                with properties ¬
+                {compression factor:jpegCompressionFactor ¬
+                    , image format:JPEG ¬
+                    , export style:IndividualSlides}
+        end timeout
+
         delete keynoteDocument
         quit
     end tell
@@ -256,9 +275,9 @@ end processImagesWithKeynote
 -- Get the image description, title or create date
 on extractCaption(imageFile)
     try
-        set the embeddedCaption to my spotlightProperty("kMDItemDescription", imageFile)
+        set the embeddedCaption to my spotlightProperty("kMDItemTitle", imageFile)
         if embeddedCaption is "" then
-            set the embeddedCaption to my spotlightProperty("kMDItemTitle", imageFile)
+            set the embeddedCaption to my spotlightProperty("kMDItemDescription", imageFile)
         end if
         if embeddedCaption is "" then
             set the embeddedCaption to my imageCreationYearMonth(imageFile)
@@ -272,15 +291,22 @@ end extractCaption
 on spotlightProperty(propertyName, imageFile)
     local command
     local shellResult
+    local actualResult
     
     set command to "mdls -raw -name " & propertyName & " " & quoted form of my pathToPosixString(imageFile)
     set shellResult to do shell script command
     
     if shellResult is "(null)" then
-        return ""
+        set actualResult to ""
     else
-        return shellResult
+        set actualResult to shellResult
     end if
+
+    if logDebugging is true then
+        log command & " ==> " & shellResult
+    end
+
+    return actualResult
 end spotlightProperty
 
 -- Convert anything to an alias
